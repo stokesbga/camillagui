@@ -82,7 +82,16 @@ export class StatusPoller {
     try {
       const response = await fetch("/api/status?since=" + levelsSince, { signal: this.controller.signal })
       if (!response.ok) throw new Error("Status unavailable")
-      status = await response.json()
+      const payload: Partial<Omit<Status, "labels">> & { labels?: Partial<Labels> | null } = await response.json()
+      // Some backends omit channel labels or newer status fields.
+      status = {
+        ...defaultStatus(),
+        ...payload,
+        labels: {
+          capture: payload.labels?.capture ?? null,
+          playback: payload.labels?.playback ?? null,
+        },
+      }
     } catch {
       status = defaultStatus()
     }

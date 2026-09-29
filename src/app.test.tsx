@@ -85,6 +85,18 @@ describe("workspace configuration actions", () => {
     expect(app!.state.unappliedChanges).toBe(true)
     expect(container.textContent).toContain("Rejected")
   })
+  it("renders normal and compact controls when status omits labels", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/status"))
+        return new Response(JSON.stringify({ ...defaultStatus(), cdsp_status: "Running", labels: undefined }))
+      if (url === "/api/storedconfigs") return new Response("[]")
+      return new Response("OK")
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(defaultGuiConfig().status_update_interval))
+    expect(container.textContent).toContain("Volume monitor")
+    await act(async () => app!.setState({ compactView: true }))
+    expect(container.querySelector(".compact-panel")?.textContent).toContain("Volume monitor")
+  })
   it("does not save when the apply part of apply-and-save fails", async () => {
     fetchMock.mockClear().mockImplementation(async () => new Response("Rejected", { status: 400 }))
     await act(async () => button("Apply and save").click())
