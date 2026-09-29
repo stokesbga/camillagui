@@ -35,7 +35,7 @@ Tests are executed by running `npm test`.
 ## Modern workspace
 
 The interface uses black and gray controls, rainbow plots, a responsive navigation rail,
-and a persistent DSP control panel. Home opens directly to frequency analysis. On narrow screens, the menu button opens navigation
+and a persistent DSP control panel. Home opens directly to the master-output spectrum. On narrow screens, the menu button opens navigation
 and the sliders button opens DSP controls. All configuration editors, file imports and
 exports, custom shortcuts, pipeline editing and plots, validation, log viewing, config
 comparison, volume/faders, automatic save/apply, and compact view remain available.
@@ -52,18 +52,26 @@ can still be inspected individually. This is not a measurement of the room or a
 combined response of the entire routed pipeline. Volume-dependent filters use 0 dB
 as the analysis reference; their existing filter-editor plots retain volume controls.
 
-**Home → Live spectrum** analyzes this browser's microphone or audio input using
-Web Audio. Start input explicitly to request access. After permission is granted,
-available audio inputs can be selected while stopped. Use an OS-provided loopback
-input to inspect local system audio. FFT size, smoothing, peak hold, display freeze,
-CSV export, and image export are available. Freezing the display keeps the input
-active; stopping the input or leaving the view closes it.
+**Home → Live spectrum** opens first and reads the CamillaDSP master output through
+`/api/spectrum`. The sibling backend project adds a localhost ALSA playback tap and
+computes FFT data from post-DSP samples. It needs a one-time setup on the DSP host;
+see [the backend setup guide](../camillagui-backend/docs/spectrum.md). The frontend
+never selects or opens a local microphone for the master-output view. Older backends
+show an update message; disconnected taps recover automatically. Output RMS/peak
+levels use the same status source as the sidebar.
 
-Audio stays in the browser and is not uploaded or played back. This spectrum is
-**not the remote CamillaDSP signal**: the existing backend provides RMS/peak status,
-not raw audio samples. Levels are digital dBFS, not calibrated SPL. Browser input
-requires HTTPS or localhost and microphone permission. No backend changes or new
-production dependencies are required for either analysis view.
+Select all outputs (spectral power average) or an individual channel. FFT size,
+smoothing, peak hold, freeze, CSV export, and image export are available. A Hann
+window normalizes sinusoidal amplitudes to digital dBFS, not calibrated SPL.
+
+**Use browser input** keeps the optional Web Audio analyzer available for a local
+microphone or loopback input. Start input explicitly to request access; HTTPS or
+localhost is required. Audio stays in the browser and is not played back or uploaded.
+Stopping input, switching back to master output, or leaving Home closes the input.
+
+The mixer matrix fills its container, scrolls horizontally for large channel counts,
+and edits selected routes below the table. Gain, scale, mute, polarity, channel labels,
+channel counts, and routing remain editable with keyboard-accessible controls.
 
 ### Local development and checks
 

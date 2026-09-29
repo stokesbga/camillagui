@@ -27,6 +27,7 @@ describe("workspace configuration actions", () => {
       if (url === "/api/guiconfig") return new Response(JSON.stringify(defaultGuiConfig()))
       if (url.startsWith("/api/status"))
         return new Response(JSON.stringify({ ...defaultStatus(), cdsp_status: "Running" }))
+      if (url.startsWith("/api/spectrum")) return new Response(JSON.stringify({ available: false, message: "No tap" }))
       return new Response("OK")
     })
     vi.stubGlobal("fetch", fetchMock)
@@ -60,7 +61,7 @@ describe("workspace configuration actions", () => {
       })),
     )
   }
-  it("opens frequency analysis on Home and keeps every editor reachable", () => {
+  it("opens live output spectrum on Home and keeps every editor reachable", async () => {
     expect(Array.from(container.querySelectorAll('[role="tab"]'), (tab) => tab.textContent)).toEqual([
       "Home",
       "Configuration",
@@ -73,7 +74,10 @@ describe("workspace configuration actions", () => {
       "Shortcuts",
     ])
     expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Home")
-    expect(button("Frequency response").getAttribute("aria-pressed")).toBe("true")
+    expect(button("Live spectrum").getAttribute("aria-pressed")).toBe("true")
+    expect(container.querySelector(".master-spectrum-card")).not.toBeNull()
+    expect(container.querySelector(".segmented-control button")?.textContent).toBe("Live spectrum")
+    await act(async () => button("Frequency response").click())
     expect(container.querySelector(".response-card")).not.toBeNull()
   })
   it("retains dirty flags on failed saves and applies", async () => {

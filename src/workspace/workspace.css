@@ -249,7 +249,7 @@ h1 {
   border-radius: 0;
   padding: 0 0 18px;
 }
-.sidepanel .box legend {
+.sidepanel .box-heading {
   font-size: 12px;
   font-weight: 550;
   padding: 0 0 10px;
@@ -400,7 +400,7 @@ h1 {
 .wide-tabpanel {
   padding: 0;
   width: 100% !important;
-  max-width: 980px;
+  max-width: none;
   height: auto;
   min-width: 0;
   gap: 14px;
@@ -418,13 +418,13 @@ h1 {
   border-radius: 6px;
   min-width: 0;
 }
-.box legend {
+.box-heading {
   font-size: 12px;
   font-weight: 550;
   padding: 0 7px;
   max-width: 100%;
 }
-.box legend .horizontally-spaced-content {
+.box-heading {
   flex-wrap: wrap;
 }
 .box .box {

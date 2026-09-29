@@ -218,25 +218,14 @@ class ProcessorView extends React.Component<ProcessorViewProps, ProcessorViewSta
             immediate={false}
           />
         }
+        actions={<DeleteButton tooltip="Delete this processor" onClick={this.props.remove} />}
       >
-        <div style={{ display: "flex", flexDirection: "row" }}>
-          <div
-            className="vertically-spaced-content"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-            }}
-          >
-            <DeleteButton tooltip={"Delete this processor"} onClick={this.props.remove} />
-          </div>
-          <ProcessorParams
-            processor={processor}
-            errors={this.props.errors}
-            updateProcessor={this.props.updateProcessor}
-            labels={channel_labels}
-          />
-        </div>
+        <ProcessorParams
+          processor={processor}
+          errors={this.props.errors}
+          updateProcessor={this.props.updateProcessor}
+          labels={channel_labels}
+        />
       </Box>
     )
   }

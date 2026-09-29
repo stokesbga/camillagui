@@ -471,22 +471,8 @@ class FilterView extends React.Component<FilterViewProps, FilterViewState> {
             )}
           </>
         }
-      >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            width: "100%",
-          }}
-        >
-          <div
-            className="vertically-spaced-content"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-            }}
-          >
+        actions={
+          <>
             <MdiButton
               icon={mdiChartBellCurveCumulative}
               tooltip="Plot frequency response of this filter"
@@ -500,18 +486,19 @@ class FilterView extends React.Component<FilterViewProps, FilterViewState> {
               />
             )}
             <DeleteButton tooltip={"Delete this filter"} onClick={this.props.remove} />
-          </div>
-          <FilterParams
-            filter={this.props.filter}
-            errors={this.props.errors}
-            updateFilter={this.props.updateFilter}
-            availableCoeffFiles={this.props.availableCoeffFiles}
-            coeffDir={this.props.coeffDir}
-            filterDefaults={this.state.filterDefaults}
-            showDefaults={this.state.showDefaults}
-            setShowDefaults={() => this.setState({ showDefaults: true })}
-          />
-        </div>
+          </>
+        }
+      >
+        <FilterParams
+          filter={this.props.filter}
+          errors={this.props.errors}
+          updateFilter={this.props.updateFilter}
+          availableCoeffFiles={this.props.availableCoeffFiles}
+          coeffDir={this.props.coeffDir}
+          filterDefaults={this.state.filterDefaults}
+          showDefaults={this.state.showDefaults}
+          setShowDefaults={() => this.setState({ showDefaults: true })}
+        />
 
         <FileSelectPopup
           key="filter select popup"
@@ -1194,17 +1181,12 @@ class FilterParams extends React.Component<FilterParamsProps, unknown> {
     else return <ErrorMessage message={error} />
     return (
       <>
-        <label htmlFor={desc} className="setting" style={{ textAlign: "right" }} data-tooltip-html={props.tooltip}>
+        <div className="setting shape-setting" data-tooltip-html={props.tooltip}>
           <EnumInput
             value={parameter}
             options={descOptions}
             desc={desc}
-            style={{
-              display: "table-cell",
-              width: "min-content",
-              textAlign: "right",
-              marginRight: "5px",
-            }}
+            className="shape-selector"
             tooltip={props.tooltip}
             onChange={onDescChange}
           />
@@ -1212,12 +1194,11 @@ class FilterParams extends React.Component<FilterParamsProps, unknown> {
             className="setting-input"
             error={error !== undefined}
             value={value}
-            style={{ width: "55%" }}
             tooltip={props.tooltip}
             onChange={onChange}
           />
           <ErrorMessage message={error} />
-        </label>
+        </div>
       </>
     )
   }

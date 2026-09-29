@@ -100,7 +100,7 @@ export class CamillaConfig extends React.Component<
           default: "var(--background-color)",
         },
         context: {
-          background: "#cb4b16",
+          background: "#303030",
           text: "#FFFFFF",
         },
         divider: {

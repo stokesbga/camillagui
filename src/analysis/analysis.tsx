@@ -1,26 +1,26 @@
 import React, { useEffect, useMemo, useState } from "react"
-import { mdiChartBellCurve, mdiMicrophoneOutline } from "@mdi/js"
+import { mdiChartBellCurve, mdiWaveform } from "@mdi/js"
 import Icon from "@mdi/react"
+import { LiveAnalysis } from "./live-analysis"
 import { fetchResponse, responseTargets, ResponseTarget } from "./response"
-import { Spectrum } from "./spectrum"
 import { Config } from "../camilladsp/config"
 import { Chart, ChartContent } from "../utilities/chart"
 
 export function Analysis({ config, openFilters }: { config: Config; openFilters: () => void }) {
-  const [mode, setMode] = useState("response")
+  const [mode, setMode] = useState("spectrum")
   return (
     <div className="analysis-workspace">
       <div className="segmented-control" aria-label="Analysis mode">
+        <button aria-pressed={mode === "spectrum"} onClick={() => setMode("spectrum")}>
+          <Icon path={mdiWaveform} size={0.75} />
+          Live spectrum
+        </button>
         <button aria-pressed={mode === "response"} onClick={() => setMode("response")}>
           <Icon path={mdiChartBellCurve} size={0.75} />
           Frequency response
         </button>
-        <button aria-pressed={mode === "spectrum"} onClick={() => setMode("spectrum")}>
-          <Icon path={mdiMicrophoneOutline} size={0.75} />
-          Live spectrum
-        </button>
       </div>
-      {mode === "response" ? <FrequencyResponse config={config} openFilters={openFilters} /> : <Spectrum />}
+      {mode === "response" ? <FrequencyResponse config={config} openFilters={openFilters} /> : <LiveAnalysis />}
     </div>
   )
 }

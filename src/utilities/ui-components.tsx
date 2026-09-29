@@ -1,4 +1,4 @@
-import React, { ChangeEvent, CSSProperties, ReactNode, useEffect, useRef, useState, KeyboardEvent } from "react"
+import React, { ChangeEvent, CSSProperties, ReactNode, useEffect, useId, useRef, useState, KeyboardEvent } from "react"
 import { mdiChartBellCurveCumulative, mdiDelete, mdiMenuDown, mdiPlusThick, mdiSitemapOutline } from "@mdi/js"
 import Icon from "@mdi/react"
 import { Range } from "immutable"
@@ -18,21 +18,17 @@ export function Box(props: {
   style?: CSSProperties
   children: ReactNode
   tooltip?: string
+  actions?: ReactNode
 }) {
+  const titleId = useId()
   return (
-    <fieldset className="box" style={props.style}>
-      <legend>
-        <div
-          data-tooltip-html={props.tooltip}
-          data-tooltip-id="main-tooltip"
-          className="horizontally-spaced-content"
-          style={{ alignItems: "center" }}
-        >
-          {props.title}
-        </div>
-      </legend>
+    <section className="box" style={props.style} aria-labelledby={titleId}>
+      <h2 id={titleId} data-tooltip-html={props.tooltip} data-tooltip-id="main-tooltip" className="box-heading">
+        {props.title}
+        {props.actions && <span className="box-actions">{props.actions}</span>}
+      </h2>
       {props.children}
-    </fieldset>
+    </section>
   )
 }
 
@@ -94,6 +90,7 @@ export function Button(props: {
     <button
       type="button"
       disabled={!enabled}
+      aria-pressed={props.highlighted == null ? undefined : props.highlighted}
       data-tooltip-html={props.tooltip}
       data-tooltip-id="main-tooltip"
       className={classNames}
@@ -276,7 +273,7 @@ export function CloseButton(props: { onClick: () => void }) {
   )
 }
 
-function settingLabel(value: string) {
+export function settingLabel(value: string) {
   const labels: Record<string, string> = {
     samplerate: "Sample rate",
     capture_samplerate: "Capture sample rate",
@@ -298,10 +295,13 @@ export function OptionLine(props: {
   small?: boolean
   style?: CSSProperties
 }) {
-  const settingStyle = props.small ? { width: "min-content" } : {}
-  const combinedStyle = Object.assign(settingStyle, props.style)
   return (
-    <label className="setting" data-tooltip-html={props.tooltip} data-tooltip-id="main-tooltip" style={combinedStyle}>
+    <label
+      className={`setting option-line${props.small ? " option-line-small" : ""}`}
+      data-tooltip-html={props.tooltip}
+      data-tooltip-id="main-tooltip"
+      style={props.style}
+    >
       <span className="setting-label">{settingLabel(props.desc)}</span>
       {props.children}
     </label>
@@ -572,7 +572,7 @@ export function LabelListOption(props: {
   return (
     <div className="setting" data-tooltip-html="Optional labels for individual channels" data-tooltip-id="main-tooltip">
       <label htmlFor={props.desc} className="setting-label">
-        {props.desc}
+        {settingLabel(props.desc)}
       </label>
       <OptionalTextInput
         value={props.value}
@@ -664,6 +664,8 @@ export class ParsedInput<TYPE> extends React.Component<ParsedInputProps<TYPE>, {
         max={props.max}
         value={this.state.rawValue}
         placeholder={props.placeholder}
+        aria-label={props.tooltip}
+        aria-invalid={!valid}
         data-tooltip-html={props.tooltip}
         data-tooltip-id="main-tooltip"
         className={props.className}
@@ -754,6 +756,8 @@ export class OptionalParsedInput<TYPE> extends React.Component<
         max={props.max}
         value={this.state.rawValue}
         data-tooltip-html={props.tooltip}
+        aria-label={props.tooltip}
+        aria-invalid={!valid}
         data-tooltip-id="main-tooltip"
         className={props.className}
         style={this.getStyle(valid)}
@@ -820,11 +824,9 @@ export function BoolOption(props: {
           style={{ cursor: "pointer" }}
         >
           <input
-            style={{
-              marginLeft: 0,
-              marginTop: "8px",
-              marginBottom: "8px",
-            }}
+            className="switch-input"
+            role="switch"
+            aria-label={settingLabel(props.desc)}
             type="checkbox"
             checked={props.value}
             data-tooltip-html={props.tooltip}
@@ -946,6 +948,7 @@ export function EnumInput<OPTION extends string>(props: {
     <select
       id={props.desc}
       name={props.desc}
+      aria-label={settingLabel(props.desc) || props.tooltip}
       value={null_to_string(value)}
       data-tooltip-html={props.tooltip}
       data-tooltip-id="main-tooltip"
@@ -995,6 +998,7 @@ export function OptionalBoolInput(props: {
     <select
       id={props.desc}
       name={props.desc}
+      aria-label={settingLabel(props.desc) || props.tooltip}
       value={optional_bool_to_string(props.value)}
       data-tooltip-html={props.tooltip}
       data-tooltip-id="main-tooltip"

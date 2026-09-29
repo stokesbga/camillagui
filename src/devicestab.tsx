@@ -53,6 +53,7 @@ import {
   OptionalTextOption,
   TextInput,
   TextOption,
+  settingLabel,
 } from "./utilities/ui-components"
 
 // TODO add volume_ramp_time
@@ -77,13 +78,27 @@ export function DevicesTab(props: {
   }, [])
   return (
     <ErrorBoundary errorMessage={errors.asText()}>
-      <div className="tabcontainer">
+      <div className="tabcontainer editor-devices">
         <div className="tabpanel">
           <ErrorMessage message={errors.rootMessage()} />
           <Samplerate
             hide_capture_samplerate={guiConfig.hide_capture_samplerate}
             devices={devices}
             errors={errors}
+            onChange={updateDevices}
+          />
+          <CaptureOptions
+            hide_capture_device={guiConfig.hide_capture_device}
+            supported_capture_types={availableBackends[1] as CaptureType[]}
+            capture={devices.capture}
+            errors={errors.forSubpath("capture")}
+            onChange={updateDevices}
+          />
+          <PlaybackOptions
+            hide_playback_device={guiConfig.hide_playback_device}
+            supported_playback_types={availableBackends[0] as PlaybackType[]}
+            playback={devices.playback}
+            errors={errors.forSubpath("playback")}
             onChange={updateDevices}
           />
           <BufferOptions devices={devices} errors={errors} onChange={updateDevices} />
@@ -111,20 +126,6 @@ export function DevicesTab(props: {
             hide_multithreading={guiConfig.hide_multithreading}
             devices={devices}
             errors={errors}
-            onChange={updateDevices}
-          />
-          <CaptureOptions
-            hide_capture_device={guiConfig.hide_capture_device}
-            supported_capture_types={availableBackends[1] as CaptureType[]}
-            capture={devices.capture}
-            errors={errors.forSubpath("capture")}
-            onChange={updateDevices}
-          />
-          <PlaybackOptions
-            hide_playback_device={guiConfig.hide_playback_device}
-            supported_playback_types={availableBackends[0] as PlaybackType[]}
-            playback={devices.playback}
-            errors={errors.forSubpath("playback")}
             onChange={updateDevices}
           />
         </div>
@@ -175,7 +176,7 @@ function SamplerateOption(props: {
   return (
     <div className="setting" data-tooltip-html-={props.tooltip} style={{ padding: padding }}>
       <label htmlFor={props.desc} className="setting-label">
-        {props.desc}
+        {settingLabel(props.desc)}
       </label>
       <EnumInput
         value={isNonDefaultSamplerate(samplerate) ? other : samplerate.toString()}
@@ -235,7 +236,7 @@ function OptionalSamplerateOption(props: {
       style={{ padding: padding }}
     >
       <label htmlFor={props.desc} className="setting-label">
-        {props.desc}
+        {settingLabel(props.desc)}
       </label>
       <EnumInput
         value={null_to_default(value, "default")}
@@ -1522,7 +1523,7 @@ function DeviceOption(props: {
   return (
     <div className="setting" data-tooltip-html="Name of device">
       <label htmlFor={props.desc} className="setting-label">
-        {props.desc}
+        {settingLabel(props.desc)}
       </label>
       <TextInput
         value={props.value}
@@ -1554,7 +1555,7 @@ function OptionalDeviceOption(props: {
   return (
     <div className="setting" data-tooltip-html="Name of device">
       <label htmlFor={props.desc} className="setting-label">
-        {props.desc}
+        {settingLabel(props.desc)}
       </label>
       <OptionalTextInput
         value={props.value}

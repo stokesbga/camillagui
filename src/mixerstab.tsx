@@ -1,14 +1,6 @@
-import React, { useState } from "react"
+import React, { useEffect, useId, useRef, useState } from "react"
 import "./index.css"
-import {
-  mdiDelete,
-  mdiPlusMinusVariant,
-  mdiVolumeOff,
-  mdiPlus,
-  mdiVolumeHigh,
-  mdiArrowDown,
-  mdiArrowLeft,
-} from "@mdi/js"
+import { mdiPlusMinusVariant, mdiVolumeOff, mdiPlus, mdiVolumeHigh } from "@mdi/js"
 import Icon from "@mdi/react"
 import { Range } from "immutable"
 import { cloneDeep } from "lodash"
@@ -25,7 +17,6 @@ import {
   GainScales,
   GainScale,
   getMixerInputLabels,
-  getLabelForChannel,
 } from "./camilladsp/config"
 import { modifiedCopyOf, Update } from "./utilities/common"
 import { Errors } from "./utilities/errors"
@@ -35,23 +26,14 @@ import {
   DeleteButton,
   ErrorMessage,
   IntOption,
-  MdiButton,
   ParsedInput,
   OptionalTextInput,
-  EnumInput,
   null_to_default,
-  FloatInput,
-  MatrixCell,
-  cssStyles,
+  FloatOption,
+  EnumOption,
   ErrorBoundary,
-  DropdownBox,
+  Button,
 } from "./utilities/ui-components"
-
-const styles = cssStyles()
-const mutedCellColor = styles.getPropertyValue("--muted-cell-color")
-const normalCellColor = styles.getPropertyValue("--normal-cell-color")
-const invertedCellColor = styles.getPropertyValue("--inverted-cell-color")
-const errorCellColor = styles.getPropertyValue("--error-cell-color")
 
 interface MixersTabProps {
   config: Config
@@ -137,7 +119,7 @@ export class MixersTab extends React.Component<
     const mixers = config.mixers ? config.mixers : {}
     return (
       <ErrorBoundary errorMessage={errors.asText()}>
-        <div className="tabcontainer">
+        <div className="tabcontainer mixer-editor">
           <div className="tabpanel" style={{ width: "100%" }}>
             <ErrorMessage message={errors.rootMessage()} />
             {this.mixerNames().map((name) => (
@@ -208,10 +190,10 @@ function MixerView(props: {
       }
     >
       <ErrorMessage message={errors.rootMessage()} />
-      <div style={{ display: "flex", justifyContent: "space-evenly" }}>
+      <div className="mixer-channel-controls">
         <IntOption
           value={mixer.channels.in}
-          desc="in"
+          desc="Inputs"
           tooltip="Number of channels in (source channels)"
           small={true}
           withControls={true}
@@ -225,7 +207,7 @@ function MixerView(props: {
         />
         <IntOption
           value={mixer.channels.out}
-          desc="out"
+          desc="Outputs"
           tooltip="Number of channels out (destination channels)"
           small={true}
           withControls={true}
@@ -246,7 +228,6 @@ function MixerView(props: {
         errors={errors}
         channels={mixer.channels}
         update={(mixerUpdate) => update((mixer) => mixerUpdate(mixer))}
-        remove={() => update((mixer) => mixer.mapping.splice(0, 1))}
         updateLabel={updateChannelLabel}
         inputLabels={input_labels}
       />
@@ -343,208 +324,151 @@ function MappingMatrix(props: {
   mixer: Mixer
   errors: Errors
   channels: { in: number; out: number }
-  remove: () => void
   update: (update: Update<Mixer>) => void
   updateLabel: (dest: number, new_label: string | null) => void
   inputLabels: (string | null)[] | null
 }) {
   const { mixer, errors, channels, update, updateLabel, inputLabels } = props
-  const [expanded, setExpanded] = useState([-1, -1])
-  const toggleExpanded = (row: number, col: number) => {
-    if (expanded[0] === row && expanded[1] === col) {
-      setExpanded([-1, -1])
-    } else {
-      setExpanded([row, col])
-    }
-  }
+  const [expanded, setExpanded] = useState<[number, number]>()
+  const editorId = useId()
+  const editorRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    editorRef.current?.querySelector("input")?.focus()
+  }, [expanded])
+  const [selected, mappingIndex, sourceIndex] = expanded ? getSource(mixer.mapping, expanded[1], expanded[0]) : []
   return (
-    <div>
-      <table className="mixer-table">
-        <tr>
-          <td colSpan={5} rowSpan={4}></td>
-          <td className="matrix-cell" colSpan={channels.in}>
-            Input
-          </td>
-        </tr>
-
-        <tr>
-          {Range(0, channels.in).map((src) => {
-            return (
-              <td className="rotate matrix-cell" key={"header" + src}>
-                <div>{getLabelForChannel(inputLabels, src, true, true)}</div>
-              </td>
-            )
-          })}
-        </tr>
-        <tr>
-          {Range(0, channels.in).map((src) => {
-            return (
-              <td className="matrix-cell" key={"header" + src}>
-                {src}
-              </td>
-            )
-          })}
-        </tr>
-        <tr>
-          {Range(0, channels.in).map((src) => {
-            return (
-              <td className="matrix-cell" key={"header" + src}>
-                <Icon path={mdiArrowDown} size="14px" />
-              </td>
-            )
-          })}
-        </tr>
-        {Range(0, channels.out).map((dest) => {
-          let label = null
-          if (dest === 0) {
-            label = (
-              <td className="rotate matrix-cell" rowSpan={channels.out}>
-                <div>Output</div>
-              </td>
-            )
-          }
-          const [mapping, map_idx] = getMapping(mixer.mapping, dest)
-          const errorsForRow = errors.forSubpath("mapping", map_idx)
-          return (
-            <tr key={"row" + dest}>
-              {label}
-              <td className="matrix-cell" key={"label" + dest}>
-                <OptionalTextInput
-                  placeholder="(no label)"
-                  className="setting-input"
-                  value={mixer.labels && mixer.labels.length > dest ? mixer.labels[dest] : null}
-                  tooltip={"Label for channel " + dest}
-                  style={{ border: "0px" }}
-                  onChange={(new_label) => updateLabel(dest, new_label)}
-                />
-              </td>
-              <td className="matrix-cell" key={"destnumber" + dest}>
-                {dest}
-              </td>
-              <td className="matrix-cell" key={"mute" + dest}>
-                <OutputMute
-                  onClick={() => {
-                    update((mixer) => {
-                      toggleMappingMute(mixer, dest)
-                    })
-                  }}
-                  mute={mapping ? mapping.mute : undefined}
-                />
-              </td>
-              <td className="matrix-cell" key={"arrow" + dest}>
-                <Icon path={mdiArrowLeft} size="14px" />
-              </td>
-              {Range(0, channels.in).map((src) => {
-                const [cell, map_idx, src_idx] = getSource(mixer.mapping, src, dest)
-                const errorsForCell = errorsForRow.forSubpath("sources", src_idx)
-                if (cell) {
-                  const csscolor = cssColorAt(cell, errorsForCell)
-                  let cellText
-                  if (cell.scale === "linear") {
-                    cellText = (+(cell.gain !== null ? cell.gain : 1).toPrecision(2)).toString()
-                  } else {
-                    cellText = Math.round(cell.gain !== null ? cell.gain : 0).toString()
-                  }
-                  //if (cell.inverted) {
-                  //  cellText = "\u2195" + cellText
-                  //}
-                  return (
-                    <td
-                      className="matrix-cell"
-                      style={{
-                        backgroundColor: csscolor,
-                      }}
-                      key={"cell" + src + "." + dest}
-                    >
-                      <div
-                        className="dropdown"
-                        style={{
-                          display: "flex",
-                          flexDirection: "row",
-                          alignItems: "last baseline",
-                          height: "100%",
-                          minHeight: "100%",
-                        }}
-                      >
-                        <MatrixCell
-                          key="expand"
-                          muted={cell.mute}
-                          text={cellText}
-                          onClick={() => {
-                            toggleExpanded(dest, src)
-                          }}
-                          style={{
-                            backgroundColor: csscolor,
-                          }}
-                        />
-                        {makeDropdown(
-                          cell,
-                          src,
-                          dest,
-                          expanded,
-                          map_idx,
-                          src_idx,
-                          errors,
-                          (cellupdate: Update<Source>) => {
-                            update((mixer) => {
-                              const cellCopy = cloneDeep(cell)
-                              cellupdate(cellCopy)
-                              updateCell(mixer, src, dest, cellCopy)
-                            })
-                          },
-                          () => {
-                            update((mixer) => {
-                              deleteCell(mixer, src, dest)
-                            })
-                          },
-                          () => {
-                            setExpanded([-1, -1])
-                          },
-                        )}
-                      </div>
-                    </td>
-                  )
-                }
-                return (
-                  <td className="matrix-cell" key={"cell" + src + "." + dest}>
-                    <AddCell
-                      onClick={() => {
-                        update((mixer) => {
-                          addCell(mixer, src, dest)
-                        })
-                      }}
+    <>
+      <div className="mixer-matrix-scroll" role="region" aria-label="Channel routing matrix">
+        <table className="mixer-table" style={{ minWidth: 230 + channels.in * 100 }}>
+          <colgroup>
+            <col className="mixer-output-column" />
+            <col className="mixer-mute-column" />
+            {Range(0, channels.in).map((src) => (
+              <col key={src} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col">Output</th>
+              <th scope="col">
+                <span className="sr-only">Mute output</span>
+              </th>
+              {Range(0, channels.in).map((src) => (
+                <th scope="col" key={src}>
+                  <span className="mixer-input-heading">Input {src}</span>
+                  {inputLabels?.[src] && <span className="mixer-input-label">{inputLabels[src]}</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Range(0, channels.out).map((dest) => {
+              const [mapping, mapIndex] = getMapping(mixer.mapping, dest)
+              return (
+                <tr key={dest} className={mapping?.mute ? "mixer-row-muted" : undefined}>
+                  <th scope="row">
+                    <div className="mixer-output-label">
+                      <span className="channel-index">{dest}</span>
+                      <OptionalTextInput
+                        placeholder="Label"
+                        value={mixer.labels?.[dest] ?? null}
+                        tooltip={"Label for output " + dest}
+                        onChange={(label) => updateLabel(dest, label)}
+                      />
+                    </div>
+                    <ErrorMessage message={errors.forSubpath("mapping", mapIndex).rootMessage()} />
+                  </th>
+                  <td>
+                    <OutputMute
+                      channel={dest}
+                      onClick={() => update((mixer) => toggleMappingMute(mixer, dest))}
+                      mute={mapping?.mute}
                     />
                   </td>
-                )
-              })}
-            </tr>
-          )
-        })}
-      </table>
-    </div>
-  )
-}
-
-const makeDropdown = (
-  cell: Source,
-  src: number,
-  dest: number,
-  expanded: number[],
-  map_idx: number,
-  src_idx: number,
-  errors: Errors,
-  update: (update: Update<Source>) => void,
-  remove: () => void,
-  close: () => void,
-) => {
-  if (expanded[0] !== dest || expanded[1] !== src) {
-    return null
-  }
-  const errorsForCell = errors.forSubpath("mapping", map_idx, "sources", src_idx)
-  return (
-    <DropdownBox enabled={true} onOutsideClick={close} style={{ borderColor: cssColorAt(cell, errorsForCell) }}>
-      <SourceCell source={cell} errors={errorsForCell} update={update} remove={remove} />
-    </DropdownBox>
+                  {Range(0, channels.in).map((src) => {
+                    const [cell, mapIndex, srcIndex] = getSource(mixer.mapping, src, dest)
+                    const active = expanded?.[0] === dest && expanded[1] === src
+                    const cellErrors = errors.forSubpath("mapping", mapIndex, "sources", srcIndex)
+                    const gain = cell?.gain ?? (cell?.scale === "linear" ? 1 : 0)
+                    const route = `Input ${src} to output ${dest}`
+                    return (
+                      <td key={src}>
+                        <button
+                          type="button"
+                          className={`route-cell ${cell ? "is-routed" : "is-empty"} ${cell?.mute ? "is-muted" : ""}`}
+                          style={
+                            cell
+                              ? ({ "--route-color": cssColorAt(cell, cellErrors) } as React.CSSProperties)
+                              : undefined
+                          }
+                          aria-label={
+                            cell
+                              ? `${route}: ${gain} ${cell.scale === "linear" ? "linear" : "dB"}${cell.inverted ? ", inverted" : ""}${cell.mute ? ", muted" : ""}`
+                              : `Add route: ${route}`
+                          }
+                          aria-expanded={active && Boolean(cell)}
+                          aria-controls={active && cell ? editorId : undefined}
+                          title={cellErrors.asText() || (cell ? "Edit route" : "Add route")}
+                          onClick={() => {
+                            if (!cell) update((mixer) => addCell(mixer, src, dest))
+                            setExpanded(active ? undefined : [dest, src])
+                          }}
+                        >
+                          {cell ? (
+                            <>
+                              {cell.inverted && <Icon path={mdiPlusMinusVariant} size={0.65} />}
+                              <span>{Number(gain.toFixed(2))}</span>
+                              <small>{cell.scale === "linear" ? "×" : "dB"}</small>
+                              {cell.mute && <Icon path={mdiVolumeOff} size={0.65} />}
+                            </>
+                          ) : (
+                            <Icon path={mdiPlus} size={0.7} />
+                          )}
+                        </button>
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {selected && expanded && (
+        <div
+          className="route-editor"
+          ref={editorRef}
+          id={editorId}
+          role="group"
+          aria-label="Edit route"
+          key={expanded.join(":")}
+        >
+          <div className="section-heading">
+            <strong>
+              Input {expanded[1]} → Output {expanded[0]}
+            </strong>
+            <button className="text-action" onClick={() => setExpanded(undefined)}>
+              Done
+            </button>
+          </div>
+          <SourceCell
+            source={selected}
+            errors={errors.forSubpath("mapping", mappingIndex!, "sources", sourceIndex!)}
+            update={(cellUpdate) =>
+              update((mixer) => {
+                const copy = cloneDeep(selected)
+                cellUpdate(copy)
+                updateCell(mixer, expanded[1], expanded[0], copy)
+              })
+            }
+            remove={() => {
+              update((mixer) => deleteCell(mixer, expanded[1], expanded[0]))
+              setExpanded(undefined)
+            }}
+          />
+        </div>
+      )}
+    </>
   )
 }
 
@@ -556,107 +480,63 @@ function SourceCell(props: {
 }) {
   const { source, errors, update, remove } = props
   return (
-    <>
-      <div className="vertically-spaced-content">
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            flexGrow: 1,
-          }}
-        >
-          <FloatInput
-            value={source.gain ? source.gain : 0.0}
-            tooltip="Gain value for this source channel"
-            className="small-setting-input"
-            onChange={(gain: number) => update((source) => (source.gain = gain))}
-          />
-        </div>
-        <ErrorMessage message={errors.forSubpath("gain").asText()} />
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            flexGrow: 1,
-          }}
-        >
-          <EnumInput
-            value={null_to_default(source.scale, "dB")}
-            options={GainScales}
-            desc=""
-            tooltip="Scale for gain"
-            onChange={(scale) => update((source) => (source.scale = scale))}
-          />
-        </div>
-
-        <div className="horizontally-spaced-content">
-          <MdiButton
-            icon={mdiPlusMinusVariant}
-            tooltip={"Invert this source channel"}
-            buttonSize="small"
-            highlighted={source.inverted}
-            onClick={() => update((source) => (source.inverted = !source.inverted))}
-          />
-          <MdiButton
-            icon={mdiVolumeOff}
-            tooltip={"Mute this source channel"}
-            buttonSize="small"
-            highlighted={source.mute}
-            onClick={() => update((source) => (source.mute = !source.mute))}
-          />
-          <MdiButton icon={mdiDelete} tooltip={"Delete this cell"} buttonSize="small" onClick={remove} />
-        </div>
-      </div>
-    </>
+    <div className="route-editor-fields">
+      <FloatOption
+        desc="Gain"
+        value={source.gain ?? (source.scale === "linear" ? 1 : 0)}
+        tooltip="Gain value for this source channel"
+        error={errors.forSubpath("gain").asText()}
+        onChange={(gain) => update((source) => (source.gain = gain))}
+      />
+      <EnumOption
+        value={null_to_default(source.scale, "dB")}
+        options={GainScales}
+        desc="Scale"
+        tooltip="Scale for gain"
+        onChange={(scale) => update((source) => (source.scale = scale))}
+      />
+      <Button
+        text="Invert polarity"
+        highlighted={source.inverted}
+        onClick={() => update((source) => (source.inverted = !source.inverted))}
+      />
+      <Button
+        text="Mute source"
+        highlighted={source.mute}
+        onClick={() => update((source) => (source.mute = !source.mute))}
+      />
+      <Button text="Remove route" onClick={remove} />
+      <ErrorMessage message={errors.rootMessage()} />
+    </div>
   )
 }
 
-function AddCell(props: { onClick: () => void }) {
-  const { onClick } = props
+function OutputMute(props: { channel: number; onClick: () => void; mute: boolean | null | undefined }) {
+  const { onClick, mute, channel } = props
+  const enabled = mute !== undefined
+  const tooltip = enabled ? `${mute ? "Unmute" : "Mute"} output ${channel}` : `Output ${channel} has no sources`
   return (
-    <div
-      data-tooltip-html="Activate this mapping cell"
-      data-tooltip-id="main-tooltip"
-      className="centered"
+    <button
+      type="button"
+      title={tooltip}
+      aria-label={tooltip}
+      aria-pressed={Boolean(mute)}
+      disabled={!enabled}
+      className="mixer-output-mute"
       onClick={onClick}
     >
-      <Icon path={mdiPlus} size="16px" />
-    </div>
-  )
-}
-
-function OutputMute(props: { onClick: () => void; mute: boolean | null | undefined }) {
-  const { onClick, mute } = props
-  const enabled = mute !== undefined
-  const audible = mute === false || mute === null
-  let tooltip
-  if (audible) {
-    tooltip = "Mute this output channel"
-  } else if (enabled) {
-    tooltip = "Unmute this output channel"
-  } else {
-    tooltip = "This output channel has no sources"
-  }
-  const click = enabled ? onClick : undefined
-  return (
-    <div
-      data-tooltip-html={tooltip}
-      data-tooltip-id="main-tooltip"
-      className={enabled ? "centered-button" : "centered-button-disabled"}
-      onClick={click}
-    >
-      <Icon path={audible ? mdiVolumeHigh : mdiVolumeOff} size="24px" />
-    </div>
+      <Icon path={mute || !enabled ? mdiVolumeOff : mdiVolumeHigh} size={0.8} />
+    </button>
   )
 }
 
 function cssColorAt(cell: Source, errors: Errors): string {
   if (errors.hasErrors()) {
-    return errorCellColor
+    return "var(--error-cell-color)"
   } else if (cell.mute) {
-    return mutedCellColor
+    return "var(--muted-cell-color)"
   } else if (cell.inverted) {
-    return invertedCellColor
+    return "var(--inverted-cell-color)"
   }
-  return normalCellColor
+  return "var(--normal-cell-color)"
 }
