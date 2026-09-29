@@ -91,7 +91,9 @@ export function Button(props: {
   if (props.highlighted === true) classNames += " highlighted-button"
   if (props.className) classNames += " " + props.className
   return (
-    <div
+    <button
+      type="button"
+      disabled={!enabled}
       data-tooltip-html={props.tooltip}
       data-tooltip-id="main-tooltip"
       className={classNames}
@@ -99,7 +101,7 @@ export function Button(props: {
       onClick={enabled ? props.onClick : () => {}}
     >
       <span className="button-text">{props.text}</span>
-    </div>
+    </button>
   )
 }
 
@@ -185,6 +187,7 @@ export function UploadButton(
     smallButton?: boolean
   },
 ): JSX.Element {
+  const inputRef = useRef<HTMLInputElement>(null)
   const style = Object.assign({ verticalAlign: "bottom" }, props.style)
   const upload = (e: ChangeEvent<HTMLInputElement>) => {
     props.upload(e.target.files!)
@@ -192,9 +195,10 @@ export function UploadButton(
   }
   return (
     <label data-tooltip-html={"tooltip" in props ? props.tooltip : ""} data-tooltip-id="main-tooltip">
-      <input style={{ display: "none" }} type="file" onChange={upload} multiple={props.multiple} />
+      <input ref={inputRef} style={{ display: "none" }} type="file" onChange={upload} multiple={props.multiple} />
       {"icon" in props && "tooltip" in props && (
         <MdiButton
+          onClick={() => inputRef.current?.click()}
           buttonSize={props.smallButton ? "small" : "default"}
           icon={props.icon}
           tooltip={props.tooltip}
@@ -202,7 +206,7 @@ export function UploadButton(
           style={style}
         />
       )}
-      {"text" in props && <Button text={props.text} onClick={() => {}} />}
+      {"text" in props && <Button text={props.text} onClick={() => inputRef.current?.click()} />}
     </label>
   )
 }
@@ -232,7 +236,10 @@ export function MdiButton(props: {
   let rot = {}
   if (props.rotation && props.rotation !== 0) rot = { transform: "rotate(" + props.rotation + "deg)" }
   return (
-    <div
+    <button
+      type="button"
+      disabled={enabled === false}
+      aria-label={tooltip?.replace(/<[^>]*>/g, " ")}
       onClick={clickhandler}
       data-tooltip-html={tooltip}
       data-tooltip-id="main-tooltip"
@@ -240,7 +247,7 @@ export function MdiButton(props: {
       style={props.style}
     >
       <Icon path={icon} size={buttonSize === "tiny" ? "15px" : "24px"} style={rot} />
-    </div>
+    </button>
   )
 }
 
@@ -257,10 +264,31 @@ export function MdiIcon(props: { icon: string; tooltip?: string; style?: CSSProp
 
 export function CloseButton(props: { onClick: () => void }) {
   return (
-    <div style={{ textAlign: "right", cursor: "pointer" }} onClick={props.onClick}>
+    <button
+      type="button"
+      className="button"
+      aria-label="Close dialog"
+      style={{ display: "block", marginLeft: "auto" }}
+      onClick={props.onClick}
+    >
       ✖
-    </div>
+    </button>
   )
+}
+
+function settingLabel(value: string) {
+  const labels: Record<string, string> = {
+    samplerate: "Sample rate",
+    capture_samplerate: "Capture sample rate",
+    chunksize: "Chunk size",
+    queuelimit: "Queue limit",
+    sampleformat: "Sample format",
+    freq: "Frequency",
+    q: "Q",
+    gain: "Gain",
+    db: "dB",
+  }
+  return labels[value] ?? value.replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase())
 }
 
 export function OptionLine(props: {
@@ -273,14 +301,8 @@ export function OptionLine(props: {
   const settingStyle = props.small ? { width: "min-content" } : {}
   const combinedStyle = Object.assign(settingStyle, props.style)
   return (
-    <label
-      htmlFor={props.desc}
-      className="setting"
-      data-tooltip-html={props.tooltip}
-      data-tooltip-id="main-tooltip"
-      style={combinedStyle}
-    >
-      <span className="setting-label">{props.desc}</span>
+    <label className="setting" data-tooltip-html={props.tooltip} data-tooltip-id="main-tooltip" style={combinedStyle}>
+      <span className="setting-label">{settingLabel(props.desc)}</span>
       {props.children}
     </label>
   )

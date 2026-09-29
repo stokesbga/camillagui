@@ -1,12 +1,12 @@
 import * as React from "react"
 import { mdiImageSizeSelectSmall } from "@mdi/js"
 import { Config } from "./camilladsp/config"
-import { defaultStatus } from "./camilladsp/status"
 import { GuiConfig } from "./guiconfig"
 import { QuickConfigSwitch, ShortcutSections } from "./shortcuts"
 import { VolumeBox } from "./sidepanel/volumebox"
 import { Update } from "./utilities/common"
 import { ErrorBoundary, MdiButton } from "./utilities/ui-components"
+import { useDspStatus } from "./workspace/status-context"
 
 export function isCompactViewEnabled(): boolean {
   return new URLSearchParams(window.location.search).has("compactview")
@@ -31,15 +31,16 @@ export function CompactView(props: {
   guiConfig: GuiConfig
 }) {
   const { currentConfigName, config, setConfig, updateConfig, disableCompactView, guiConfig } = props
+  const status = useDspStatus()
   return (
-    <div className="tabpanel" style={{ margin: "auto" }}>
+    <div className="tabpanel compact-panel" style={{ margin: "auto" }}>
       <DisableCompactViewButton disableCompactView={disableCompactView} />
       <ErrorBoundary>
         <VolumeBox
-          vuMeterStatus={defaultStatus()}
+          vuMeterStatus={status}
           setMessage={() => {}}
-          inputLabels={null}
-          outputLabels={null}
+          inputLabels={status.labels.capture}
+          outputLabels={status.labels.playback}
           guiConfig={guiConfig}
         />
         <ShortcutSections sections={guiConfig.custom_shortcuts} config={config} updateConfig={updateConfig} />

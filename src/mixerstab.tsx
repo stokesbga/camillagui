@@ -138,7 +138,7 @@ export class MixersTab extends React.Component<
     return (
       <ErrorBoundary errorMessage={errors.asText()}>
         <div className="tabcontainer">
-          <div className="tabpanel" style={{ width: "700px" }}>
+          <div className="tabpanel" style={{ width: "100%" }}>
             <ErrorMessage message={errors.rootMessage()} />
             {this.mixerNames().map((name) => (
               <MixerView
@@ -196,7 +196,7 @@ function MixerView(props: {
         <>
           <ParsedInput
             value={name}
-            style={{ width: "300px" }}
+            style={{ width: "min(300px, 100%)" }}
             tooltip="Mixer name, must be unique"
             onChange={rename}
             asString={(name) => name}

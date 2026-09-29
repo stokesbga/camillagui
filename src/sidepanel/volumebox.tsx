@@ -26,6 +26,7 @@ export interface Volume {
 }
 
 export class VolumePoller {
+  private stopped = false
   private timerId: NodeJS.Timeout | undefined
   private readonly onUpdate: (volume: Volume) => void
   private readonly update_interval: number
@@ -39,6 +40,7 @@ export class VolumePoller {
   }
 
   private async updateVolume() {
+    if (this.stopped) return
     this.timerId = undefined
     try {
       const volreq = await fetch("/api/getparam/volume")
@@ -55,18 +57,19 @@ export class VolumePoller {
             }
       // Only update if the timer hasn't been restarted
       // while we were reading the volume and mute settings.
-      if (this.timerId === undefined) {
+      if (!this.stopped && this.timerId === undefined) {
         this.onUpdate(volume)
       }
     } catch (err) {
       console.log(err)
     }
-    if (this.timerId === undefined) {
+    if (!this.stopped && this.timerId === undefined) {
       this.timerId = setTimeout(this.updateVolume.bind(this), this.update_interval)
     }
   }
 
   stop() {
+    this.stopped = true
     if (this.timerId !== undefined) {
       clearTimeout(this.timerId)
       this.timerId = undefined
@@ -74,6 +77,7 @@ export class VolumePoller {
   }
 
   restart_timer() {
+    if (this.stopped) return
     if (this.timerId !== undefined) {
       clearTimeout(this.timerId)
     }
@@ -120,6 +124,7 @@ export class VolumeBox extends React.Component<Props, State> {
 
   componentWillUnmount() {
     this.volumePoller.stop()
+    this.setDspVolumeDebounced.cancel()
   }
 
   private toggleMute() {
@@ -189,41 +194,40 @@ export class VolumeBox extends React.Component<Props, State> {
     const maxVol = this.props.guiConfig.volume_max
     const minVol = maxVol - this.props.guiConfig.volume_range
     return (
-      <Box
-        title={
-          <>
-            Vol:
-            <div className={mute ? "db-label-muted" : "db-label"}>{volume.toFixed(1)}dB</div>
-            <MdiButton
-              icon={mdiVolumeOff}
-              tooltip={mute ? "Un-Mute" : "Mute"}
-              buttonSize="small"
-              highlighted={mute}
-              onClick={this.toggleMute}
-            />
-            <MdiButton
-              icon={mdiVolumeMedium}
-              tooltip={dim ? "Un-Dim" : "Dim (-20dB)"}
-              buttonSize="small"
-              highlighted={dim}
-              enabled={(dim && volume <= maxVol - 20) || (!dim && volume >= minVol + 20)}
-              onClick={this.toggleDim}
-            />
-            <MdiButton
-              icon={mdiVolumeMinus}
-              tooltip="Lower volume by 1 dB"
-              buttonSize="small"
-              onClick={() => this.adjustVolume(-1)}
-            />
-            <MdiButton
-              icon={mdiVolumePlus}
-              tooltip="Raise volume by 1 dB"
-              buttonSize="small"
-              onClick={() => this.adjustVolume(1)}
-            />
-          </>
-        }
-      >
+      <Box title="Master output">
+        <div className={`volume-readout ${mute ? "is-muted" : ""}`}>
+          <strong>{Number.isFinite(volume) ? volume.toFixed(1) : "—"}</strong>
+          <span>dB {mute ? "· Muted" : dim ? "· Dimmed" : ""}</span>
+        </div>
+        <div className="volume-actions">
+          <MdiButton
+            icon={mdiVolumeOff}
+            tooltip={mute ? "Un-Mute" : "Mute"}
+            buttonSize="small"
+            highlighted={mute}
+            onClick={this.toggleMute}
+          />
+          <MdiButton
+            icon={mdiVolumeMedium}
+            tooltip={dim ? "Un-Dim" : "Dim (-20dB)"}
+            buttonSize="small"
+            highlighted={dim}
+            enabled={(dim && volume <= maxVol - 20) || (!dim && volume >= minVol + 20)}
+            onClick={this.toggleDim}
+          />
+          <MdiButton
+            icon={mdiVolumeMinus}
+            tooltip="Lower volume by 1 dB"
+            buttonSize="small"
+            onClick={() => this.adjustVolume(-1)}
+          />
+          <MdiButton
+            icon={mdiVolumePlus}
+            tooltip="Raise volume by 1 dB"
+            buttonSize="small"
+            onClick={() => this.adjustVolume(1)}
+          />
+        </div>
         <VuMeterGroup title="IN" levels={capturesignalrms} peaks={capturesignalpeak} labels={this.props.inputLabels} />
         <input
           style={{ width: "100%", margin: 0, padding: 0 }}
@@ -232,6 +236,7 @@ export class VolumeBox extends React.Component<Props, State> {
           max={10.0 * maxVol}
           value={10.0 * volume}
           id="volume"
+          aria-label="Master volume"
           onChange={(e) => this.changeVolume(e.target.valueAsNumber / 10.0)}
         />
         <VuMeterGroup

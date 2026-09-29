@@ -186,7 +186,7 @@ export class FiltersTab extends React.Component<
     return (
       <ErrorBoundary errorMessage={errors.asText()}>
         <div>
-          <div className="horizontally-spaced-content" style={{ width: "700px" }}>
+          <div className="horizontally-spaced-content editor-toolbar">
             <EnumOption
               value={this.state.sortBy}
               options={FilterSortKeys}
@@ -202,7 +202,7 @@ export class FiltersTab extends React.Component<
             />
           </div>
           <div className="tabcontainer">
-            <div className="tabpanel-with-header" style={{ width: "700px" }}>
+            <div className="tabpanel-with-header" style={{ width: "100%" }}>
               <ErrorMessage message={errors.rootMessage()} />
               {this.filterNames().map((name) => (
                 <FilterView
@@ -448,11 +448,11 @@ class FilterView extends React.Component<FilterViewProps, FilterViewState> {
       }
     return (
       <Box
-        style={{ width: "700px" }}
+        style={{ width: "100%" }}
         title={
           <>
             <ParsedInput
-              style={{ width: "300px" }}
+              style={{ width: "min(300px, 100%)" }}
               value={name}
               asString={(x) => x}
               parseValue={(newName) => (isValidFilterName(newName) ? newName : undefined)}
@@ -476,7 +476,7 @@ class FilterView extends React.Component<FilterViewProps, FilterViewState> {
           style={{
             display: "flex",
             flexDirection: "row",
-            width: "670px",
+            width: "100%",
           }}
         >
           <div
@@ -540,11 +540,7 @@ class FilterView extends React.Component<FilterViewProps, FilterViewState> {
           onSelect={this.pickFilterFile}
         />
         {this.state.showFilterPlot && this.state.data ? (
-          <div
-            style={{
-              width: this.state.expandPlot && this.state.showFilterPlot ? "1100px" : "670px",
-            }}
-          >
+          <div className={`filter-plot ${this.state.expandPlot ? "filter-plot-expanded" : ""}`}>
             <Chart data={this.state.data} onChange={this.plotFilterInitially} />
             <div
               style={{
@@ -727,7 +723,7 @@ class FilterParams extends React.Component<FilterParamsProps, unknown> {
     const { filter, errors } = this.props
     const subtypeOptions = this.getSubtypeOptions(filter.type)
     return (
-      <div style={{ width: "100%", textAlign: "right" }}>
+      <div style={{ width: "100%", minWidth: 0, textAlign: "right" }}>
         <ErrorMessage message={errors.rootMessage()} />
         <EnumOption
           value={filter.type}

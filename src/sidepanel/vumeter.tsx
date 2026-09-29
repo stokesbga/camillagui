@@ -3,6 +3,7 @@ import "../index.css"
 import { Range } from "immutable"
 import { clamp } from "lodash"
 import { getLabelForChannel } from "../camilladsp/config"
+import { rainbowGradient } from "../utilities/rainbow"
 import { cssStyles } from "../utilities/ui-components"
 
 export function VuMeterGroup(props: {
@@ -135,7 +136,9 @@ function drawLevelBars(
   clipped: boolean,
   index: number,
 ) {
-  context.fillStyle = css.getPropertyValue(clipped ? "--error-text-color" : "--success-text-color")
+  context.fillStyle = clipped
+    ? css.getPropertyValue("--error-text-color")
+    : rainbowGradient(context, labelWidth, labelWidth + meterWidth)
   const rmsBarWidth = Math.round((meterWidth * levelInPercent) / 100)
   context.fillRect(labelWidth, meterYOffset(index), rmsBarWidth, meterHeightInPX) // draw rms bar
   const peakX = labelWidth + Math.min(meterWidth - 2, Math.round((meterWidth * peakInPercent) / 100 - 1))

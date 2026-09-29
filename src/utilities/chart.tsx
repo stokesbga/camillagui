@@ -16,6 +16,7 @@ import zoomPlugin from "chartjs-plugin-zoom"
 import { Scatter } from "react-chartjs-2"
 import { Tooltip as ReactTooltip } from "react-tooltip"
 import ReactjsPopup from "reactjs-popup"
+import { rainbowGradient } from "./rainbow"
 import { CloseButton, cssStyles, MdiButton } from "./ui-components"
 
 ChartJS.register(LinearScale, LogarithmicScale, PointElement, LineElement, Tooltip, Legend, zoomPlugin)
@@ -117,7 +118,8 @@ export function Chart(props: { data: ChartContent; onChange: (item: string) => v
     data.datasets.push({
       label: "Gain",
       fill: false,
-      borderColor: gainColor,
+      borderColor: ({ chart }) =>
+        chart.chartArea ? rainbowGradient(chart.ctx, chart.chartArea.left, chart.chartArea.right) : gainColor,
       backgroundColor: gainColor,
       pointBackgroundColor: gainColor,
       pointRadius: 0,
@@ -423,6 +425,7 @@ export function Chart(props: { data: ChartContent; onChange: (item: string) => v
       },
     }
     const options: { [key: string]: unknown } = {
+      maintainAspectRatio: false,
       scales: scales,
       plugins: {
         zoom: zoomOptions,
@@ -433,7 +436,7 @@ export function Chart(props: { data: ChartContent; onChange: (item: string) => v
         },
       },
       animation: {
-        duration: 500,
+        duration: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 500,
       },
     }
     return options
@@ -447,7 +450,7 @@ export function Chart(props: { data: ChartContent; onChange: (item: string) => v
     return 0
   }
 
-  const sampleRateOptions = props.data.options
+  const sampleRateOptions = [...props.data.options]
     .sort(sortBySamplerateAndChannels)
     .map((option) => <option key={option.name}>{option.name}</option>)
   const selected = props.data.options.find(
@@ -469,7 +472,15 @@ export function Chart(props: { data: ChartContent; onChange: (item: string) => v
           </select>
         )}
       </div>
-      <Scatter data={data} options={options} ref={chartRef} />
+      <div className="frequency-chart-canvas">
+        <Scatter
+          data={data}
+          options={options}
+          ref={chartRef}
+          aria-label={`${props.data.name}: calculated frequency response`}
+          role="img"
+        />
+      </div>
       <MdiButton icon={mdiImage} tooltip="Save plot as image" onClick={downloadPlot} />
       <MdiButton icon={mdiTable} tooltip="Save plot data as csv" onClick={downloadData} />
       <MdiButton icon={mdiHome} tooltip="Reset zoom and pan" onClick={resetView} />

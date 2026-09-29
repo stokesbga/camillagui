@@ -134,7 +134,7 @@ export class ProcessorsTab extends React.Component<
     return (
       <ErrorBoundary errorMessage={errors.asText()}>
         <div>
-          <div className="horizontally-spaced-content" style={{ width: "700px" }}>
+          <div className="horizontally-spaced-content editor-toolbar">
             <EnumOption
               value={this.state.sortBy}
               options={ProcessorSortKeys}
@@ -150,7 +150,7 @@ export class ProcessorsTab extends React.Component<
             />
           </div>
           <div className="tabcontainer">
-            <div className="tabpanel-with-header" style={{ width: "700px" }}>
+            <div className="tabpanel-with-header" style={{ width: "100%" }}>
               <ErrorMessage message={errors.rootMessage()} />
               {this.processorNames().map((name) => (
                 <ProcessorView
@@ -206,10 +206,10 @@ class ProcessorView extends React.Component<ProcessorViewProps, ProcessorViewSta
     const channel_labels = getProcessorChannelLabels(config, name)
     return (
       <Box
-        style={{ width: "700px" }}
+        style={{ width: "100%" }}
         title={
           <ParsedInput
-            style={{ width: "300px" }}
+            style={{ width: "min(300px, 100%)" }}
             value={name}
             asString={(x) => x}
             parseValue={(newName) => (isValidProcessorName(newName) ? newName : undefined)}
@@ -363,7 +363,7 @@ class ProcessorParams extends React.Component<ProcessorParamsProps, unknown> {
   render() {
     const { processor, errors, labels } = this.props
     return (
-      <div style={{ width: "100%", textAlign: "right" }}>
+      <div style={{ width: "100%", minWidth: 0, textAlign: "right" }}>
         <ErrorMessage message={errors.rootMessage()} />
         <EnumOption
           value={processor.type}

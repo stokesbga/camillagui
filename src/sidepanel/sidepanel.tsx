@@ -3,17 +3,17 @@ import "../index.css"
 import { mdiScaleUnbalanced } from "@mdi/js"
 import isEqual from "lodash/isEqual"
 import { AuxFadersBox } from "./auxfaderbox"
-import camillalogo from "./camilladsp.svg"
 import { Configcheckmessage } from "./configcheckmessage"
 import { LogFileViewerPopup } from "./logfileviewer"
 import { VolumeBox } from "./volumebox"
 import { Config } from "../camilladsp/config"
-import { defaultStatus, isBackendOnline, isCdspOnline, Status, StatusPoller } from "../camilladsp/status"
+import { isBackendOnline, isCdspOnline, Status } from "../camilladsp/status"
 import { VersionLabels } from "../camilladsp/versions"
 import { GuiConfig } from "../guiconfig"
 import { DiffPopup } from "../utilities/diffpopup"
 import { Errors } from "../utilities/errors"
 import { Box, Button, delayedExecutor, SuccessFailureButton, MdiButton } from "../utilities/ui-components"
+import { useDspStatus } from "../workspace/status-context"
 
 interface SidePanelProps {
   config: Config
@@ -29,10 +29,14 @@ interface SidePanelProps {
   unappliedChanges: boolean
 }
 
-export class SidePanel extends React.Component<
-  SidePanelProps,
+export function SidePanel(props: SidePanelProps) {
+  const cdspStatus = useDspStatus()
+  return <ControlPanel {...props} cdspStatus={cdspStatus} />
+}
+
+class ControlPanel extends React.Component<
+  SidePanelProps & { cdspStatus: Status },
   {
-    cdspStatus: Status
     applyConfigAutomatically: boolean
     saveConfigAutomatically: boolean
     msg: string
@@ -42,18 +46,12 @@ export class SidePanel extends React.Component<
     showDiffPopup: boolean
   }
 > {
-  private statusPoller = new StatusPoller(
-    (cdspStatus) => this.setState({ cdspStatus }),
-    this.props.guiConfig.status_update_interval,
-  )
-
   private applyTimer = delayedExecutor(500)
   private saveTimer = delayedExecutor(500)
 
-  constructor(props: SidePanelProps) {
+  constructor(props: SidePanelProps & { cdspStatus: Status }) {
     super(props)
     this.state = {
-      cdspStatus: defaultStatus(),
       applyConfigAutomatically: props.guiConfig.apply_config_automatically,
       saveConfigAutomatically: props.guiConfig.save_config_automatically,
       msg: "",
@@ -62,10 +60,6 @@ export class SidePanel extends React.Component<
       diffConfigGUI: {} as Config,
       showDiffPopup: false,
     }
-  }
-
-  componentWillUnmount() {
-    this.statusPoller.stop()
   }
 
   componentDidUpdate(prevProps: { config: Config; guiConfig: GuiConfig }) {
@@ -78,9 +72,6 @@ export class SidePanel extends React.Component<
       this.setState({
         saveConfigAutomatically: save_config_automatically,
       })
-    const { status_update_interval } = this.props.guiConfig
-    if (status_update_interval !== prevProps.guiConfig.status_update_interval)
-      this.statusPoller.set_interval(status_update_interval)
     if (this.state.applyConfigAutomatically && !isEqual(prevProps.config, this.props.config))
       this.applyTimer(() => {
         this.props.applyConfig().catch(() => {})
@@ -95,19 +86,28 @@ export class SidePanel extends React.Component<
   render() {
     return (
       <section className="sidepanel">
-        <img src={camillalogo} alt="graph" width="100%" height="100%" />
-        {isCdspOnline(this.state.cdspStatus) && (
+        {!isCdspOnline(this.props.cdspStatus) && (
+          <div className="offline-monitor">
+            <span>Output</span>
+            <div className="offline-level">
+              — <small>dB</small>
+            </div>
+            <div className="offline-meter" />
+            <p>DSP offline</p>
+          </div>
+        )}
+        {isCdspOnline(this.props.cdspStatus) && (
           <VolumeBox
-            vuMeterStatus={this.state.cdspStatus}
+            vuMeterStatus={this.props.cdspStatus}
             setMessage={(message) => this.setState({ msg: message })}
-            inputLabels={this.state.cdspStatus.labels.capture}
-            outputLabels={this.state.cdspStatus.labels.playback}
+            inputLabels={this.props.cdspStatus.labels.capture}
+            outputLabels={this.props.cdspStatus.labels.playback}
             guiConfig={this.props.guiConfig}
           />
         )}
-        {isCdspOnline(this.state.cdspStatus) && <AuxFadersBox guiConfig={this.props.guiConfig} />}
-        {this.cdspStateBox()}
+        {isCdspOnline(this.props.cdspStatus) && <AuxFadersBox guiConfig={this.props.guiConfig} />}
         {this.configBox()}
+        {this.cdspStateBox()}
         <DiffPopup
           open={this.state.showDiffPopup}
           onClose={() => this.setState({ showDiffPopup: false })}
@@ -116,15 +116,20 @@ export class SidePanel extends React.Component<
           right_config={this.state.diffConfigGUI}
           right_name="GUI"
         />
-        <VersionLabels versions={this.state.cdspStatus} />
+        {this.state.msg && (
+          <p className="inline-error" role="status">
+            {this.state.msg}
+          </p>
+        )}
+        <VersionLabels versions={this.props.cdspStatus} />
       </section>
     )
   }
 
   private cdspStateBox() {
-    const status = this.state.cdspStatus
+    const status = this.props.cdspStatus
     return (
-      <Box title="CamillaDSP">
+      <Box title="Engine status">
         <div className="two-column-grid" style={{ gridTemplateColumns: "max-content auto" }}>
           <div className="alignRight">State:</div>
           <div>{status.cdsp_status}</div>
@@ -137,9 +142,9 @@ export class SidePanel extends React.Component<
           <div className="alignRight">Buffer level:</div>
           <div>{status.bufferlevel}</div>
           <div className="alignRight">DSP load:</div>
-          <div>{status.processingload ? status.processingload.toFixed(1) + "%" : ""} </div>
+          <div>{typeof status.processingload === "number" ? status.processingload.toFixed(1) + "%" : ""} </div>
           <div className="alignRight">Resampler load:</div>
-          <div>{status.resamplerload ? status.resamplerload.toFixed(1) + "%" : ""} </div>
+          <div>{typeof status.resamplerload === "number" ? status.resamplerload.toFixed(1) + "%" : ""} </div>
           <div className="alignRight">Message:</div>
           <div>{this.props.message}</div>
         </div>
@@ -158,7 +163,7 @@ export class SidePanel extends React.Component<
   }
 
   private configBox() {
-    const status = this.state.cdspStatus
+    const status = this.props.cdspStatus
     const cdsp_online = isCdspOnline(status)
     const activeConfigFile = this.props.currentConfigFile
     const activeConfigSelected = Boolean(activeConfigFile)
@@ -177,11 +182,11 @@ export class SidePanel extends React.Component<
       <Box
         title={
           <>
-            Config
+            Configuration
             <MdiButton
               icon={mdiScaleUnbalanced}
               tooltip={`Compare configs in DSP and GUI`}
-              enabled={true}
+              enabled={cdsp_online}
               onClick={() => this.compareConfig()}
               buttonSize="small"
             />
@@ -243,6 +248,7 @@ export class SidePanel extends React.Component<
             <div className="setting-label-wide">Apply automatically</div>
             <input
               className="setting-input"
+              aria-label="Apply automatically"
               type="checkbox"
               checked={this.state.applyConfigAutomatically}
               onChange={(e) =>
@@ -264,6 +270,7 @@ export class SidePanel extends React.Component<
             <div className="setting-label-wide">Save automatically</div>
             <input
               className="setting-input"
+              aria-label="Save automatically"
               type="checkbox"
               checked={this.state.saveConfigAutomatically}
               onChange={(e) =>
@@ -282,7 +289,9 @@ export class SidePanel extends React.Component<
             data-tooltip-id="main-tooltip"
             style={{ textAlign: "center", marginTop: "5px" }}
           >
-            {unsaved ? "All saved: ⚠️" : "All saved: ✔️"}
+            <span className={unsaved ? "pending-state" : "success-text"}>
+              {unsaved ? "● Unsaved" : activeConfigSelected ? "✓ Saved" : "No file selected"}
+            </span>
           </div>
           <div
             data-tooltip-html={
@@ -293,7 +302,9 @@ export class SidePanel extends React.Component<
             data-tooltip-id="main-tooltip"
             style={{ textAlign: "center", marginTop: "5px" }}
           >
-            {unapplied ? "All applied: ⚠️" : "All applied: ✔️"}
+            <span className={unapplied ? "pending-state" : "success-text"}>
+              {unapplied ? "● Not applied" : "✓ Applied"}
+            </span>
           </div>
         </div>
         <Configcheckmessage config={this.props.config} setErrors={this.props.setErrors} />
@@ -329,7 +340,7 @@ export class SidePanel extends React.Component<
         diffConfigGUI: guiConfig,
       })
     } catch (e) {
-      console.log(e)
+      this.setState({ msg: e instanceof Error ? e.message : "Unable to compare configurations" })
     }
   }
 }

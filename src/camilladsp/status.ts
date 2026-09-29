@@ -57,6 +57,8 @@ export function isBackendOnline(status: Status): boolean {
 }
 
 export class StatusPoller {
+  private stopped = false
+  private readonly controller = new AbortController()
   private timerId: NodeJS.Timeout
   private readonly onUpdate: (status: Status) => void
   private lastLevelTime: number = 0
@@ -73,14 +75,18 @@ export class StatusPoller {
   }
 
   private async updateStatus() {
+    if (this.stopped) return
     let status: Status
     const now = Date.now()
     const levelsSince = (now - this.lastLevelTime) / 1000.0
     try {
-      status = await (await fetch("/api/status?since=" + levelsSince)).json()
+      const response = await fetch("/api/status?since=" + levelsSince, { signal: this.controller.signal })
+      if (!response.ok) throw new Error("Status unavailable")
+      status = await response.json()
     } catch {
       status = defaultStatus()
     }
+    if (this.stopped) return
     if (status.capturesignalpeak.length > 0 && status.playbacksignalpeak.length > 0) {
       this.capturesignalpeak = status.capturesignalpeak
       this.capturesignalrms = status.capturesignalrms
@@ -104,6 +110,8 @@ export class StatusPoller {
   }
 
   stop() {
+    this.stopped = true
+    this.controller.abort()
     clearTimeout(this.timerId)
   }
 

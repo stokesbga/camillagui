@@ -23,6 +23,7 @@ export interface Fader {
 }
 
 export class FadersPoller {
+  private stopped = false
   private timerId: NodeJS.Timeout | undefined
   private readonly onUpdate: (faders: Fader[]) => void
   private readonly update_interval: number
@@ -36,24 +37,26 @@ export class FadersPoller {
   }
 
   private async updateFaders() {
+    if (this.stopped) return
     this.timerId = undefined
     try {
       const fadersreq = fetch("/api/getparamjson/faders")
       const faders = (await (await fadersreq).json()) as Fader[]
       // Only update if the timer hasn't been restarted
       // while we were reading the volume and mute settings.
-      if (this.timerId === undefined) {
+      if (!this.stopped && this.timerId === undefined) {
         this.onUpdate(faders.slice(1))
       }
     } catch (err) {
       console.log("unable to read faders", err)
     }
-    if (this.timerId === undefined) {
+    if (!this.stopped && this.timerId === undefined) {
       this.timerId = setTimeout(this.updateFaders.bind(this), this.update_interval)
     }
   }
 
   stop() {
+    this.stopped = true
     if (this.timerId !== undefined) {
       clearTimeout(this.timerId)
       this.timerId = undefined
@@ -61,6 +64,7 @@ export class FadersPoller {
   }
 
   restart_timer() {
+    if (this.stopped) return
     if (this.timerId !== undefined) {
       clearTimeout(this.timerId)
     }
@@ -117,6 +121,7 @@ export class AuxFadersBox extends React.Component<Props, State> {
 
   componentWillUnmount() {
     this.fadersPoller.stop()
+    this.setDspFadersDebounced.cancel()
   }
 
   private toggleMute(idx: number) {

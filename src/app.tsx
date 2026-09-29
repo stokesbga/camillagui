@@ -1,0 +1,567 @@
+import * as React from "react"
+import {
+  mdiAlert,
+  mdiArrowULeftTop,
+  mdiArrowURightTop,
+  mdiImageSizeSelectSmall,
+  mdiViewDashboardOutline,
+  mdiFileDocumentOutline,
+  mdiSpeaker,
+  mdiTuneVariant,
+  mdiShuffleVariant,
+  mdiChip,
+  mdiSourceBranch,
+  mdiFolderOutline,
+  mdiLightningBoltOutline,
+  mdiMenu,
+  mdiClose,
+  mdiTune,
+  mdiSineWave,
+} from "@mdi/js"
+import Icon from "@mdi/react"
+import { cloneDeep } from "lodash"
+import isEqual from "lodash/isEqual"
+import { createTheme } from "react-data-table-component"
+import { Tab, TabList, TabPanel, Tabs } from "react-tabs"
+import { Tooltip } from "react-tooltip"
+import { Config, defaultConfig, getCaptureDeviceChannelCount } from "./camilladsp/config"
+import { CompactView, isCompactViewEnabled, setCompactViewEnabled } from "./compactview"
+import { DevicesTab } from "./devicestab"
+import { Files } from "./filestab"
+import { FiltersTab } from "./filterstab"
+import { defaultGuiConfig, GuiConfig } from "./guiconfig"
+import { UndoRedo } from "./main/UndoRedo"
+import { MixersTab } from "./mixerstab"
+import { PipelineTab } from "./pipeline/pipelinetab"
+import { ProcessorsTab } from "./processorstab"
+import { Shortcuts } from "./shortcuts"
+import { SidePanel } from "./sidepanel/sidepanel"
+import { TitleTab } from "./titletab"
+import { Update } from "./utilities/common"
+import { Errors, NoErrors } from "./utilities/errors"
+import { loadStartupConfig } from "./utilities/files"
+import { delayedExecutor, MdiButton, MdiIcon } from "./utilities/ui-components"
+import { Overview } from "./workspace/overview"
+import { ConnectionBadge, StatusProvider } from "./workspace/status-context"
+
+export class CamillaConfig extends React.Component<
+  unknown,
+  {
+    activetab: number
+    navigationOpen: boolean
+    controlsOpen: boolean
+    currentConfigFile?: string
+    guiConfig: GuiConfig
+    undoRedo: UndoRedo<Config>
+    errors: Errors
+    compactView: boolean
+    message: string
+    unsavedChanges: boolean
+    unappliedChanges: boolean
+  }
+> {
+  constructor(props: unknown) {
+    super(props)
+    this.updateConfig = this.updateConfig.bind(this)
+    this.applyConfig = this.applyConfig.bind(this)
+    this.fetchConfig = this.fetchConfig.bind(this)
+    this.saveConfig = this.saveConfig.bind(this)
+    this.saveAndApplyConfig = this.saveAndApplyConfig.bind(this)
+    this.setCurrentConfig = this.setCurrentConfig.bind(this)
+    this.setCurrentConfigFileName = this.setCurrentConfigFileName.bind(this)
+    this.setErrors = this.setErrors.bind(this)
+    this.switchTab = this.switchTab.bind(this)
+    this.setCompactViewEnabled = this.setCompactViewEnabled.bind(this)
+    this.NormalContent = this.NormalContent.bind(this)
+    this.saveNotify = this.saveNotify.bind(this)
+    this.applyNotify = this.applyNotify.bind(this)
+    this.state = {
+      activetab: 0,
+      navigationOpen: false,
+      controlsOpen: false,
+      guiConfig: defaultGuiConfig(),
+      undoRedo: new UndoRedo(defaultConfig()),
+      errors: NoErrors,
+      compactView: isCompactViewEnabled(),
+      message: "",
+      unsavedChanges: false,
+      unappliedChanges: true,
+    }
+    this.loadGuiConfig()
+    this.loadConfigAtStart()
+    createTheme(
+      "camilla",
+      {
+        text: {
+          primary: "var(--text-color)",
+          secondary: "var(--text-color)",
+        },
+        background: {
+          default: "var(--background-color)",
+        },
+        context: {
+          background: "#cb4b16",
+          text: "#FFFFFF",
+        },
+        divider: {
+          default: "var(--box-border-color)",
+        },
+        highlightOnHover: {
+          default: "var(--active-button-background-color)",
+        },
+        sortFocus: {
+          default: "var(--success-text-color)",
+        },
+      },
+      "dark",
+    )
+  }
+
+  private async loadGuiConfig() {
+    fetch("/api/guiconfig")
+      .then(
+        (data) => data.json(),
+        (err) => {
+          console.log("Failed to fetch guiconfig", err)
+        },
+      )
+      .then(
+        (json) => {
+          if (json) this.setState({ guiConfig: { ...defaultGuiConfig(), ...json } })
+        },
+        (err) => {
+          console.log("Failed to parse guiconfig as json", err)
+        },
+      )
+  }
+
+  private async loadConfigAtStart() {
+    try {
+      const json = await loadStartupConfig()
+      this.setCurrentConfig(json.configFileName ? json.configFileName : undefined, json.config)
+      let message = ""
+      if (json.source === "dsp") {
+        message = "Loaded from DSP"
+      } else if (json.source === "active") {
+        message = "Loaded active"
+      } else if (json.source === "default") {
+        message = "Loaded default"
+      }
+
+      this.setState({ message: message })
+    } catch (err) {
+      console.log("Failed getting active config:", err)
+    }
+  }
+
+  private async fetchConfig() {
+    const conf_req = await fetch("/api/getconfig")
+    if (!conf_req.ok) {
+      const errorMessage = await conf_req.text()
+      this.setState({ message: errorMessage })
+      throw new Error(errorMessage)
+    }
+    const config = await conf_req.json()
+    if (config)
+      this.setState({
+        unsavedChanges: false,
+        unappliedChanges: false,
+        message: "OK",
+        undoRedo: new UndoRedo(config),
+      })
+    else this.setState({ message: "No config received" })
+  }
+
+  private setCompactViewEnabled(enabled: boolean) {
+    setCompactViewEnabled(enabled)
+    this.setState({ compactView: enabled })
+  }
+
+  private saveNotify() {
+    this.setState({ unsavedChanges: false })
+  }
+
+  private applyNotify() {
+    this.setState({ unappliedChanges: false })
+  }
+
+  private readonly saveTimer = delayedExecutor(100)
+
+  private updateConfig(update: Update<Config>, saveAfterDelay: boolean = false) {
+    this.setState(
+      (prevState) => {
+        const newConfig = cloneDeep(prevState.undoRedo.current())
+        update(newConfig)
+        let unsavedChanges = true
+        let unappliedChanges = true
+        if (isEqual(newConfig, prevState.undoRedo.current())) {
+          unsavedChanges = prevState.unsavedChanges
+          unappliedChanges = prevState.unappliedChanges
+        }
+        return {
+          unsavedChanges: unsavedChanges,
+          unappliedChanges: unappliedChanges,
+          undoRedo: prevState.undoRedo.changeTo(newConfig),
+        }
+      },
+      () => {
+        if (saveAfterDelay) this.saveTimer(this.applyConfig)
+      },
+    )
+  }
+
+  private async applyConfig(): Promise<void> {
+    await this.applyConfigRequest(this.state.currentConfigFile, this.state.undoRedo.current())
+  }
+
+  private async applyConfigRequest(filename: string | undefined, config: Config): Promise<void> {
+    const conf_req = await fetch("/api/setconfig", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: filename,
+        config: config,
+      }),
+    })
+    const message = await conf_req.text()
+    this.setState({ message })
+    if (!conf_req.ok) throw new Error(message)
+    this.setState((state) => ({ unappliedChanges: !isEqual(state.undoRedo.current(), config) }))
+  }
+
+  private async saveConfig() {
+    if (this.state.currentConfigFile) {
+      const config = this.state.undoRedo.current()
+      const filename = this.state.currentConfigFile
+      const conf_req = await fetch("/api/saveconfigfile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename,
+          config,
+        }),
+      })
+      const message = await conf_req.text()
+      this.setState({ message })
+      if (!conf_req.ok) throw new Error(message)
+      this.setState((state) => ({
+        unsavedChanges: state.currentConfigFile !== filename || !isEqual(state.undoRedo.current(), config),
+      }))
+    }
+  }
+
+  private async saveAndApplyConfig() {
+    await this.applyConfig()
+    await this.saveConfig()
+  }
+
+  private setCurrentConfig(filename: string | undefined, config: Config) {
+    this.setState({
+      unsavedChanges: false,
+      unappliedChanges: true,
+      currentConfigFile: filename,
+      undoRedo: new UndoRedo(config),
+    })
+  }
+
+  private setCurrentConfigFileName(filename: string | undefined) {
+    this.setState({
+      currentConfigFile: filename,
+    })
+  }
+
+  private setErrors(errors: Errors) {
+    this.setState({ errors: errors })
+  }
+
+  componentDidUpdate() {
+    //ReactTooltip.rebuild()
+    document.title = this.state.guiConfig.page_title
+  }
+
+  componentDidMount() {
+    document.title = this.state.guiConfig.page_title
+  }
+
+  private switchTab(index: number) {
+    this.setState({ activetab: index, navigationOpen: false }, () => {
+      if (window.matchMedia?.("(max-width: 800px)").matches) document.getElementById("workspace-content")?.focus()
+    })
+  }
+
+  render() {
+    return (
+      <StatusProvider interval={this.state.guiConfig.status_update_interval}>
+        <div className="configapp">
+          <Tooltip id="main-tooltip" className="tooltip" />
+          {this.state.compactView ? (
+            <CompactView
+              currentConfigName={this.state.currentConfigFile}
+              config={this.state.undoRedo.current()}
+              setConfig={(filename, config) => {
+                this.setCurrentConfig(filename, config)
+                this.applyConfigRequest(filename, config)
+              }}
+              updateConfig={(update) => this.updateConfig(update, true)}
+              disableCompactView={() => this.setCompactViewEnabled(false)}
+              guiConfig={this.state.guiConfig}
+            />
+          ) : (
+            <this.NormalContent />
+          )}
+        </div>
+      </StatusProvider>
+    )
+  }
+
+  private NormalContent() {
+    const { errors, undoRedo, currentConfigFile } = this.state
+    const config = undoRedo.current()
+    const pages = [
+      {
+        title: "Home",
+        icon: mdiViewDashboardOutline,
+      },
+      {
+        title: "Configuration",
+        icon: mdiFileDocumentOutline,
+      },
+      {
+        title: "Devices",
+        icon: mdiSpeaker,
+        error: "devices",
+      },
+      {
+        title: "Filters",
+        icon: mdiTuneVariant,
+        error: "filters",
+      },
+      {
+        title: "Mixers",
+        icon: mdiShuffleVariant,
+        error: "mixers",
+      },
+      {
+        title: "Processors",
+        icon: mdiChip,
+        error: "processors",
+      },
+      {
+        title: "Pipeline",
+        icon: mdiSourceBranch,
+        error: "pipeline",
+      },
+      {
+        title: "Files",
+        icon: mdiFolderOutline,
+      },
+      {
+        title: "Shortcuts",
+        icon: mdiLightningBoltOutline,
+      },
+    ]
+    const page = pages[this.state.activetab]
+    return (
+      <Tabs
+        className={`workspace-shell ${this.state.controlsOpen ? "controls-open" : ""} ${this.state.navigationOpen ? "navigation-open" : ""}`}
+        selectedIndex={this.state.activetab}
+        onSelect={this.switchTab}
+      >
+        <a className="skip-link" href="#workspace-content">
+          Skip to workspace
+        </a>
+        <aside className="navigation-rail" aria-label="Workspace navigation">
+          <div className="brand">
+            <div className="brand-symbol">
+              <Icon path={mdiSineWave} size={1.2} />
+            </div>
+            <div>
+              <strong>
+                camilla<span>DSP</span>
+              </strong>
+            </div>
+            <button
+              className="icon-action nav-close"
+              aria-label="Close navigation"
+              onClick={() => this.setState({ navigationOpen: false })}
+            >
+              <Icon path={mdiClose} size={0.8} />
+            </button>
+          </div>
+          <TabList className="workspace-nav" aria-label="Workspaces">
+            {pages.map((item) => (
+              <Tab key={item.title} className="nav-item" selectedClassName="nav-item-selected">
+                <Icon path={item.icon} size={0.8} />
+                <span>{item.title}</span>
+                {item.error && errors.hasErrorsFor(item.error) && <ErrorIcon />}
+              </Tab>
+            ))}
+          </TabList>
+        </aside>
+        {this.state.navigationOpen && (
+          <button
+            className="navigation-scrim"
+            aria-label="Close navigation"
+            onClick={() => this.setState({ navigationOpen: false })}
+          />
+        )}
+        <div className="workspace-center">
+          <header className="workspace-topbar">
+            <div className="breadcrumb">
+              <button
+                className="icon-action mobile-menu"
+                aria-label="Open navigation"
+                onClick={() => this.setState({ navigationOpen: true })}
+              >
+                <Icon path={mdiMenu} size={0.85} />
+              </button>
+              <h1>{page.title}</h1>
+            </div>
+            <div className="topbar-actions">
+              <ConnectionBadge />
+              <button
+                className="icon-action controls-toggle"
+                aria-label="Toggle DSP controls"
+                aria-expanded={this.state.controlsOpen}
+                onClick={() => this.setState((state) => ({ controlsOpen: !state.controlsOpen }))}
+              >
+                <Icon path={mdiTune} size={0.85} />
+              </button>
+            </div>
+          </header>
+          <main id="workspace-content" className="workspace-content" tabIndex={-1}>
+            <div className="config-toolbar">
+              <div className="config-file-strip">
+                <Icon path={mdiFolderOutline} size={0.75} />
+                <span>{currentConfigFile || config.title || "Untitled"}</span>
+                <span className={`file-state ${this.state.unsavedChanges ? "has-changes" : ""}`}>
+                  {this.state.unsavedChanges ? "Unsaved" : currentConfigFile ? "Saved" : "No file"}
+                </span>
+              </div>
+              <div className="history-actions">
+                <MdiButton
+                  icon={mdiArrowULeftTop}
+                  tooltip={"Undo last change<br>" + undoRedo.undoDiff()}
+                  onClick={() =>
+                    this.setState((state) => ({
+                      undoRedo: state.undoRedo.undo(),
+                      unsavedChanges: true,
+                      unappliedChanges: true,
+                    }))
+                  }
+                  enabled={undoRedo.canUndo()}
+                />
+                <MdiButton
+                  icon={mdiArrowURightTop}
+                  tooltip={"Redo last change<br>" + undoRedo.redoDiff()}
+                  onClick={() =>
+                    this.setState((state) => ({
+                      undoRedo: state.undoRedo.redo(),
+                      unsavedChanges: true,
+                      unappliedChanges: true,
+                    }))
+                  }
+                  enabled={undoRedo.canRedo()}
+                />
+                <MdiButton
+                  icon={mdiImageSizeSelectSmall}
+                  tooltip="Change to compact view"
+                  onClick={() => this.setCompactViewEnabled(true)}
+                />
+              </div>
+            </div>
+            <TabPanel>
+              <Overview config={config} navigate={this.switchTab} />
+            </TabPanel>
+            <TabPanel>
+              <TitleTab config={config} updateConfig={this.updateConfig} />
+            </TabPanel>
+            <TabPanel>
+              <DevicesTab
+                devices={config.devices}
+                guiConfig={this.state.guiConfig}
+                updateConfig={this.updateConfig}
+                errors={errors.forSubpath("devices")}
+              />
+            </TabPanel>
+            <TabPanel>
+              <FiltersTab
+                config={config}
+                samplerate={config.devices.samplerate}
+                channels={getCaptureDeviceChannelCount(config.devices.capture)}
+                coeffDir={this.state.guiConfig.coeff_dir}
+                updateConfig={this.updateConfig}
+                errors={errors.forSubpath("filters")}
+              />
+            </TabPanel>
+            <TabPanel>
+              <MixersTab config={config} updateConfig={this.updateConfig} errors={errors.forSubpath("mixers")} />
+            </TabPanel>
+            <TabPanel>
+              <ProcessorsTab
+                config={config}
+                updateConfig={this.updateConfig}
+                errors={errors.forSubpath("processors")}
+              />
+            </TabPanel>
+            <TabPanel>
+              <PipelineTab config={config} updateConfig={this.updateConfig} errors={errors.forSubpath("pipeline")} />
+            </TabPanel>
+            <TabPanel>
+              <Files
+                currentConfigFile={currentConfigFile}
+                config={config}
+                setCurrentConfig={this.setCurrentConfig}
+                setCurrentConfigFileName={this.setCurrentConfigFileName}
+                updateConfig={this.updateConfig}
+                saveNotify={this.saveNotify}
+                guiConfig={this.state.guiConfig}
+              />
+            </TabPanel>
+            <TabPanel>
+              <Shortcuts
+                currentConfigName={currentConfigFile}
+                config={this.state.undoRedo.current()}
+                setConfig={(filename, config) => {
+                  this.setCurrentConfig(filename, config)
+                  this.applyConfigRequest(filename, config)
+                }}
+                updateConfig={(update) => this.updateConfig(update, true)}
+                shortcutSections={this.state.guiConfig.custom_shortcuts}
+              />
+            </TabPanel>
+          </main>
+        </div>
+        <aside className="control-rail" aria-label="DSP controls">
+          <div className="control-rail-heading">
+            <span>DSP</span>
+            <button
+              className="icon-action controls-toggle"
+              aria-label="Close DSP controls"
+              onClick={() => this.setState({ controlsOpen: false })}
+            >
+              <Icon path={mdiClose} size={0.8} />
+            </button>
+          </div>
+          <SidePanel
+            currentConfigFile={currentConfigFile}
+            config={config}
+            guiConfig={this.state.guiConfig}
+            applyConfig={this.applyConfig}
+            fetchConfig={this.fetchConfig}
+            saveConfig={this.saveConfig}
+            saveAndApplyConfig={this.saveAndApplyConfig}
+            setErrors={this.setErrors}
+            message={this.state.message}
+            unsavedChanges={this.state.unsavedChanges}
+            unappliedChanges={this.state.unappliedChanges}
+          />
+        </aside>
+      </Tabs>
+    )
+  }
+}
+
+function ErrorIcon() {
+  return <MdiIcon icon={mdiAlert} tooltip="There are errors on this tab" style={{ color: "var(--error-text-color)" }} />
+}
